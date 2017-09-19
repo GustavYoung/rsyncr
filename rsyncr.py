@@ -1,0 +1,254 @@
+# A highly useful rsync wrapper that does the heavy lifting in supporting humans in detecting dangerous changes to a folder structure synchronization.
+# The script highlights the main changes and detects potential unwanted file deletions, while hinting to moved files that might correspond to a folder rename or move
+
+# TODO: add setup.py and shortcut generation
+# TODO: investigate while mod'd files only appear in sync mode
+
+# RSYNC status output explanation:
+#   Source: https://stackoverflow.com/questions/4493525/rsync-what-means-the-f-on-rsync-logs
+#   1: > received,  . unchanged or modified (cf. below), c local change, * message, e.g. deleted, h hardlink, * = message following (no path)
+#   2: f file, d directory, L symlink, D device, S special
+#   3: c checksum of orther change
+#   4: s size change
+#   5: t time change
+#   6: p permission
+#   7: o owner
+#   8: g group
+#   9: u future
+#   10: a ACL (not available on all systems)
+#   11: x extended attributes (as above)
+
+# rsync options:
+#   -r  --recursive recursive
+#   -R  --relative preserves full path
+#   -u  --update skip files newer in target
+#   -i  --itemize-changes Show results (itemize - necessary to allow parsing)
+#   -t  --times keep timestamps
+#   -S  --sparse sparse files handling
+#   -b  --backup make backups using the "~~" suffix (into folder hierarchy), use --backup-dir and --suffix to modify base backup dir and backup suffix. A second sync will remove backups as well!
+#   -h  --human-readable
+#   -c  --checksum  compute checksum, don't use name, time and size
+#   --stats  traffic stats
+#   --existing only update files already there
+#   --ignore-existing  stronger then -u: don't copy existing files, even if older than in source
+#   --prune-empty-dirs  # on target, if updating
+#   -z, --compress --compress-level=9
+
+
+# Standard modules
+import collections
+import os
+import subprocess
+import sys
+
+
+# Constants
+MAX_MOVE_DIRS = 2  # don't show more than this number of potential directory moves
+MAX_EDIT_DISTANCE = 5  # insertions/deletions/replacements(/moves for damerau-levenshtein)
+
+
+# Utility functions
+def xany(pred, lizt): return reduce(lambda a, b: a or pred(b), lizt if hasattr(lizt, '__iter__') else list(lizt), False)
+def xall(pred, lizt): return reduce(lambda a, b: a and pred(b), lizt if hasattr(lizt, '__iter__') else list(lizt), True)
+
+# Conditional function definition for cygwin under Windows
+if sys.platform == 'win32':  # this assumes that the rsync for windows build is using cygwin internals
+  def cygwinify(path):
+    p = path.replace("\\", "/")
+    if ":" in p:  # cannot use os.path.splitdrive on linux/cygwin
+      x = p.split(":")
+      p = "/cygdrive/" + x[0].lower() + x[1]
+    return p
+else:
+  def cygwinify(path): return path
+
+
+# Rsync output classification helpers
+State = {".": "unchanged", ">": "store", "c": "changed", "<": "restored", "*": "message"}
+Entry = {"f": "file", "d": "dir", "u": "unknown"}
+Change = {".": False, "+": True, "s": True, "t": True}  # size/time have [.+st] in their position
+FileState = collections.namedtuple("FileState", ["state", "type", "change", "path", "newdir"])  # 9 characters and one space before relative path
+
+
+def parseLine(line):
+  ''' Parse one rsync item. '''
+  atts = line.split(" ")[0]  # until space between itemization info and path
+  path = line[line.index(" ") + 1:]
+
+  state = State.get(atts[0])
+  if state != "message":
+    entry = Entry.get(atts[1])
+    change = xany(lambda _: _ in "cstpoguax", atts[2:])  # check attributes
+  else:
+    entry = Entry["u"]
+    change = True
+  while path.startswith(" "): path = path[1:]
+  path = cygwinify(os.path.abspath(path))
+  newdir = atts[:2] == "cd" and xall(lambda _: _ == "+", atts[2:])
+  if state == "message" and atts[1:] == "deleting": state = "deleted"
+  try: assert path.startswith(cwdParent + "/")
+  except: raise Exception("Wrong path prefix: %s vs %s " % (path, cwdParent))
+  return FileState(state, entry, change, path[len(cwdParent):], newdir)
+
+
+# Parse command line
+if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017
+  This rsync-wrapper simplifies backing up the current directory tree. Options:
+
+  Syntax:  rsyncr [<target-path>] [options]
+
+  Copy mode options (default: update):
+    --add       -a  Add only new files (don't update older files in target)
+    --sync      -s  Remove files in target if removed in source
+    --simulate  -n  Don't actually sync, stop after simulation
+    --force     -y  Sync even if deletions or moved files have been detected
+
+  Generic options:
+    --flat  -1      Don't recurse into sub folders, only copy current folder
+    --verbose  -v   Show more output
+    --help  -h      Show this information
+"""); sys.exit(0)
+
+
+# Parse program options
+add = '--add' in sys.argv or '-a' in sys.argv
+sync = '--sync' in sys.argv or '-s' in sys.argv
+force = '--force' in sys.argv or '-y' in sys.argv
+simulate = '--simulate' in sys.argv or '-n' in sys.argv
+flat = '--flat' in sys.argv or '-1' in sys.argv
+verbose = '--verbose' in sys.argv or '-v' in sys.argv
+if verbose:
+  import time
+  time_start = time.time()
+
+
+# External modules
+try:
+  from textdistance import distance as _distance  # https://github.com/orsinium/textdistance
+  def distance(a, b): return _distance('l', a, b)  # h = hamming, l = levenshtein, dl = damerau-levenshtein
+  assert distance("abc", "cbe") == 2  # until bug has been fixed
+  if verbose: print("Using textdistance library")
+except:
+  try:
+    from stringdist import levenshtein as distance  # https://pypi.python.org/pypi/StringDist/1.0.9
+    assert distance("abc", "cbe") == 2
+    if verbose: print("Using StringDist library")
+  except:
+    try:
+      from brew_distance import distance as _distance  # https://github.com/dhgutteridge/brew-distance  slow implementation
+      def distance(a, b): return _distance(a, b)[0]  # [1] contains operations
+      assert distance("abc", "cbe") == 2  # until bug has been fixed
+      if verbose: print("Using brew_distance library")
+    except:
+      try:
+        from edit_distance import SequenceMatcher as _distance # https://github.com/belambert/edit-distance  slow implementation
+        def distance(a, b): return _distance(a, b).distance()
+        assert distance("abc", "cbe") == 2
+        if verbose: print("Using edit_distance library")
+      except:
+        try:
+          from editdistance import eval as distance  # https://pypi.python.org/pypi/editdistance/0.2
+          assert distance("abc", "cbe") == 2
+          if verbose: print("Using editdistance library")
+        except:
+          def distance(a, b): return 0 if a == b else 1  # simple distance measure fallback
+          assert distance("abc", "cbe") == 1
+          if verbose: print("Using simple comparison")
+
+
+# Preprocess source and target folders
+rsyncPath = os.getenv("RSYNC", None)  # allows definition if custom executable
+cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directories name may not exist in target, we need to track its contents as its own folder
+target = cygwinify(os.path.abspath(sys.argv[1])); target = target + "/" if not target.endswith("/") else target
+source = cygwinify(os.getcwd()); source = source + "/" if not source.endswith("/") else source  # or os.path.abspath(os.path.relpath(relSource))
+diff = os.path.relpath(target, source)
+if diff != "" and not diff.startswith(".."):
+  print("Cannot copy to sub-folder of source! Relative path: .%s%s" % (os.sep, diff))
+  sys.exit(1)
+if verbose:
+  print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
+
+
+# Prepare simulation run
+command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " -n %s %s %s --exclude=.redundir/ --filter='P .redundir' -i -t -S '%s' '%s'" % (
+  "-r" if not flat else "",
+  "--ignore-existing" if add else "-u",  # -u only observes timestamp of target, this observes existence
+  "--delete --prune-empty-dirs --delete-excluded" if sync else "",
+  source,
+  target)
+
+
+# Simulation rsync run
+if verbose: print("\nSimulating: %s" % command)
+so = subprocess.Popen(command, shell = True, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
+lines = so.replace("\r", "").split("\n")
+entries = [parseLine(line) for line in lines if line != ""]  # parse itemized information
+entries = [entry for entry in entries if entry.path != ""]  # throw out all parent folders (TODO might require makedirs())
+# if verbose and debug: print "\n".join([str(entry) for entry in entries])
+
+
+# Detect files belonging to newly create directories - can be ignored regarding removal or moving
+newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path) and e.type == "file"] for entry in entries if entry.newdir}
+entries = [entry for entry in entries if entry.path not in newdirs and not xany(lambda files: entry.path in files, newdirs.values())]
+
+# Main logic: Detect files and relationships
+def new(entry): return [e.path for e in addNames if e != entry and os.path.basename(entry.path) == os.path.basename(e.path)]  # all entries not being the first one (which they shouldn't be anyway)
+addNames = [f for f in entries if f.state == "store"]
+potentialMoves = {old.path: new(old) for old in entries if old.type == "unknown" and old.state == "deleted"}  # what about modified?
+removes = [rem for rem, froms in potentialMoves.items() if froms == []]
+potentialMoves = {k: v for k, v in potentialMoves.items() if k not in removes}
+modified = [entry.path for entry in entries if entry.type == "file" and entry.change and entry.path not in removes and entry.path not in potentialMoves]
+added = [entry.path for entry in entries if entry.type == "file" and entry.state in ("store", "changed") and entry.path and not xany(lambda a: entry.path in a, potentialMoves.values())]  # latter is a weak check
+modified = [name for name in modified if name not in added]
+if verbose: print("Computing potential directory moves")  # HINT: a check if all removed files can be found in a new directory cannot be done, as we only that that a directory has been deleted, but nothing about its files
+potentialMoveDirs = {delname: ", ".join(["%s:%d" % (_[1], _[0]) for _ in sorted([(distance(os.path.basename(addname), os.path.basename(delname)), addname) for addname in newdirs.keys()]) if _[0] < MAX_EDIT_DISTANCE][:MAX_MOVE_DIRS]) for delname in potentialMoves.keys() + removes}
+potentialMoveDirs = {k: v for k, v in potentialMoveDirs.items() if v != ""}
+
+
+# User output
+if len(added) > 0:
+  print("%-5s added files" % len(added))
+  if verbose: print("\n".join("  " + add for add in added))
+if len(newdirs) > 0:
+  print("%-5s added dirs  (including %d files)" % (len(newdirs), sum([len(files) for files in newdirs.values()])))
+  if verbose: print("\n".join("D " + folder + " (%d files)" % len(files) + ("\n  " + "\n  ".join(files) if len(files) > 0 else "") for folder, files in sorted(newdirs.items())))
+if len(modified) > 0:
+  print("%-5s mod'd files" % len(modified))
+  if verbose: print("\n".join("  " + mod for mod in sorted(modified)))
+if len(removes) > 0:
+  print("%-5s rem'd entries" % len(removes))
+  print("\n".join("  " + rem for rem in sorted(removes)))
+if len(potentialMoves) > 0:
+  print("%-5s moved files (maybe)" % len(potentialMoves))
+  print("\n".join("  %s -> %s" % (_from, _tos) for _from, _tos in sorted(potentialMoves.items())))
+if len(potentialMoveDirs) > 0:
+  print("%-5s moved dirs  (maybe) " % len(potentialMoveDirs))
+  print("\n".join("  %s -> %s" % (_from, _tos) for _from, _tos in sorted(potentialMoveDirs.items())))
+
+
+# Breaking point
+if simulate:
+  print("Aborting before execution by user request.")  # never continue beyond this point
+  if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
+  sys.exit(0)
+if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
+  print("\nPotentially damaging changes detected. Use -f or --force to run rsync anyway.")
+  sys.exit(0)
+
+
+# Prepare rsync execution
+command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " %s %s %s %s --exclude=.redundir/ --filter='P .redundir' -i -t -S -b --suffix='~~' --human-readable --stats -z --compress-level=9 '%s' '%s'" % (
+  "-v" if verbose else "",
+  "-r" if not flat else "",
+  "--ignore-existing" if add else "-u",  # -u only observes timestamp of target, this observes existence
+  "--delete --prune-empty-dirs --delete-excluded" if sync else "",
+  source,
+  target)
+
+# Main rsync execution with some stats output
+if verbose: print("\nExecuting: " + command)
+subprocess.Popen(command, shell = True, bufsize = 1, stdout = sys.stdout, stderr = sys.stderr).wait()
+
+
+# Quit
+if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
