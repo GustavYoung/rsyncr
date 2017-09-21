@@ -1,9 +1,6 @@
 # A highly useful rsync wrapper that does the heavy lifting in supporting humans in detecting dangerous changes to a folder structure synchronization.
 # The script highlights the main changes and detects potential unwanted file deletions, while hinting to moved files that might correspond to a folder rename or move
 
-# TODO: add setup.py and shortcut generation
-# TODO: investigate while mod'd files only appear in sync mode
-
 # RSYNC status output explanation:
 #   Source: https://stackoverflow.com/questions/4493525/rsync-what-means-the-f-on-rsync-logs
 #   1: > received,  . unchanged or modified (cf. below), c local change, * message, e.g. deleted, h hardlink, * = message following (no path)
