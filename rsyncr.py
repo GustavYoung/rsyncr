@@ -104,18 +104,20 @@ if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr
     --force     -y  Sync even if deletions or moved files have been detected
 
   Generic options:
-    --flat  -1      Don't recurse into sub folders, only copy current folder
-    --verbose  -v   Show more output
-    --help  -h      Show this information
+    --flat      -1  Don't recurse into sub folders, only copy current folder
+    --compress  -c  Compress data during transport, handle many files better
+    --verbose   -v  Show more output
+    --help      -h  Show this information
 """); sys.exit(0)
 
 
 # Parse program options
 add = '--add' in sys.argv or '-a' in sys.argv
 sync = '--sync' in sys.argv or '-s' in sys.argv
-force = '--force' in sys.argv or '-y' in sys.argv
 simulate = '--simulate' in sys.argv or '-n' in sys.argv
+force = '--force' in sys.argv or '-y' in sys.argv
 flat = '--flat' in sys.argv or '-1' in sys.argv
+compress = '--compress' in sys.argv or '-c' in sys.argv
 verbose = '--verbose' in sys.argv or '-v' in sys.argv
 if verbose:
   import time
@@ -170,10 +172,11 @@ if verbose:
 
 
 # Prepare simulation run
-command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " -n %s %s %s --exclude=.redundir/ --filter='P .redundir' -i -t -S '%s' '%s'" % (
-  "-r" if not flat else "",
-  "--ignore-existing" if add else "-u",  # -u only observes timestamp of target, this observes existence
-  "--delete --prune-empty-dirs --delete-excluded" if sync else "",
+command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " -n %s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t '%s' '%s'" % (
+  "-r " if not flat else "",
+  "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
+  "--delete --prune-empty-dirs --delete-excluded " if sync else "",
+  "-S -z --compress-level=9 " if compress else ""
   source,
   target)
 
@@ -237,11 +240,12 @@ if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force
 
 
 # Prepare rsync execution
-command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " %s %s %s %s --exclude=.redundir/ --filter='P .redundir' -i -t -S -b --suffix='~~' --human-readable --stats -z --compress-level=9 '%s' '%s'" % (
-  "-v" if verbose else "",
-  "-r" if not flat else "",
-  "--ignore-existing" if add else "-u",  # -u only observes timestamp of target, this observes existence
-  "--delete --prune-empty-dirs --delete-excluded" if sync else "",
+command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t -b --suffix='~~' --human-readable --stats '%s' '%s'" % (
+  "-v " if verbose else "",
+  "-r " if not flat else "",
+  "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
+  "--delete --prune-empty-dirs --delete-excluded " if sync else "",
+  "-S -z --compress-level=9 " if compress else ""
   source,
   target)
 
