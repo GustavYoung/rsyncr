@@ -121,9 +121,9 @@ if verbose:
   time_start = time.time()
 
 
-# External modules
+# External modules - down here as we need parsed options
 try:
-  from textdistance import distance as _distance  # https://github.com/orsinium/textdistance
+  from textdistance import distance as _distance  # https://github.com/orsinium/textdistance, now for Python 2 as well
   def distance(a, b): return _distance('l', a, b)  # h = hamming, l = levenshtein, dl = damerau-levenshtein
   assert distance("abc", "cbe") == 2  # until bug has been fixed
   if verbose: print("Using textdistance library")
@@ -173,7 +173,7 @@ command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " -n
   "-r " if not flat else "",
   "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
   "--delete --prune-empty-dirs --delete-excluded " if sync else "",
-  "-S -z --compress-level=9 " if compress else ""
+  "-S -z --compress-level=9 " if compress else "",
   source,
   target)
 
@@ -242,7 +242,7 @@ command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " %s
   "-r " if not flat else "",
   "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
   "--delete --prune-empty-dirs --delete-excluded " if sync else "",
-  "-S -z --compress-level=9 " if compress else ""
+  "-S -z --compress-level=9 " if compress else "",
   source,
   target)
 
