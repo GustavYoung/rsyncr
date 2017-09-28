@@ -232,7 +232,7 @@ if simulate:
   if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
   sys.exit(0)
 if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
-  print("\nPotentially damaging changes detected. Use -f or --force to run rsync anyway.")
+  print("\nPotentially damaging changes detected. Use -y or --force to run rsync anyway.")
   sys.exit(0)
 
 
