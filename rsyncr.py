@@ -114,7 +114,7 @@ add = '--add' in sys.argv or '-a' in sys.argv
 sync = '--sync' in sys.argv or '-s' in sys.argv
 simulate = '--simulate' in sys.argv or '-n' in sys.argv
 force = '--force' in sys.argv or '-y' in sys.argv
-ask = '--ask' in sys.argv or 'i' in sys.argv
+ask = '--ask' in sys.argv or '-i' in sys.argv
 flat = '--flat' in sys.argv or '-1' in sys.argv
 compress = '--compress' in sys.argv or '-c' in sys.argv
 verbose = '--verbose' in sys.argv or '-v' in sys.argv
@@ -230,7 +230,10 @@ if len(potentialMoveDirs) > 0:
 
 # Breaking point
 if ask:
-  force = raw_input("Continue? [y/N]").lower() == "y"
+  if sys.platform == 'win32':
+    print("Cannot query input through wrapper batch file")
+  else:
+    force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')
 elif simulate:
   print("Aborting before execution by user request.")  # never continue beyond this point
   if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
