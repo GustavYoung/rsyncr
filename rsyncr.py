@@ -99,6 +99,7 @@ if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr
     --sync      -s  Remove files in target if removed in source
     --simulate  -n  Don't actually sync, stop after simulation
     --force     -y  Sync even if deletions or moved files have been detected
+    --ask       -i  In case of dangerous operation, ask user interactively
 
   Generic options:
     --flat      -1  Don't recurse into sub folders, only copy current folder
@@ -113,6 +114,7 @@ add = '--add' in sys.argv or '-a' in sys.argv
 sync = '--sync' in sys.argv or '-s' in sys.argv
 simulate = '--simulate' in sys.argv or '-n' in sys.argv
 force = '--force' in sys.argv or '-y' in sys.argv
+ask = '--ask' in sys.argv or 'i' in sys.argv
 flat = '--flat' in sys.argv or '-1' in sys.argv
 compress = '--compress' in sys.argv or '-c' in sys.argv
 verbose = '--verbose' in sys.argv or '-v' in sys.argv
@@ -227,7 +229,9 @@ if len(potentialMoveDirs) > 0:
 
 
 # Breaking point
-if simulate:
+if ask:
+  force = raw_input("Continue? [y/N]").lower() == "y"
+elif simulate:
   print("Aborting before execution by user request.")  # never continue beyond this point
   if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
   sys.exit(0)
