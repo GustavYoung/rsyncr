@@ -1,11 +1,11 @@
 # rsyncr #
-Awesome useful rsync convenience wrapper for Python.
+Awesome useful `rsync` convenience wrapper for Python.
 Does the heavy lifting of finding potential problems.
 
 
 ## Installation ##
 ```
-pip install rsyncr
+pip[3] install rsyncr
 ```
 
 ## Usage ##

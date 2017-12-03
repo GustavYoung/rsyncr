@@ -1,4 +1,4 @@
-# A highly useful rsync wrapper that does the heavy lifting in supporting humans in detecting dangerous changes to a folder structure synchronization.
+# A highly useful rsync wrapper that does the heavy lifting to support humans in detecting dangerous changes to a folder structure synchronization.
 # The script highlights the main changes and detects potential unwanted file deletions, while hinting to moved files that might correspond to a folder rename or move
 
 # RSYNC status output explanation:
@@ -166,6 +166,9 @@ diff = os.path.relpath(target, source)
 if diff != "" and not diff.startswith(".."):
   print("Cannot copy to sub-folder of source! Relative path: .%s%s" % (os.sep, diff))
   sys.exit(1)
+if not force and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
+  print("Are you sure you want to sychronize from %r to %r? Use --force if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))
+  sys.exit(2)
 if verbose:
   print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
@@ -239,7 +242,7 @@ elif simulate:
   if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
   sys.exit(0)
 if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
-  print("\nPotentially damaging changes detected. Use -y or --force to run rsync anyway.")
+  print("\nPotentially damaging changes detected. Use --force to run rsync anyway.")
   sys.exit(0)
 
 
