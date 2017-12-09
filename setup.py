@@ -1,5 +1,4 @@
-import os
-import time
+import os, time
 from setuptools import setup, find_packages
 
 lt = time.localtime()
@@ -15,25 +14,23 @@ if os.path.exists("dist"):
     try: os.unlink(os.path.join("dist", file))
     except: print("Cannot remove old distribution file " + file)
 
-setup(  # https://pypi.python.org/pypi?%3Aaction=list_classifiers
+setup(
   name = 'rsyncr',
   version = versionString,  # without extra
   description = "rsyncr",
   long_description = "",  # TODO
   classifiers = [c.strip() for c in """
         Development Status :: 4 - Beta
-        License :: Free To Use But Restricted
         Intended Audience :: Developers
         Intended Audience :: Other Audience
         Intended Audience :: Science/Research
         Intended Audience :: System Administrators
         License :: OSI Approved :: GNU General Public License v3 (GPLv3)
         Operating System :: OS Independent
-        Programming Language :: Other
         Programming Language :: Python
         Programming Language :: Python :: 2
         Programming Language :: Python :: 3
-        """.split('\n') if c.strip()],
+        """.split('\n') if c.strip()],  # https://pypi.python.org/pypi?%3Aaction=list_classifiers
   keywords = 'Rsync wrapper for safe backups',
   author = 'Arne Bachmann',
   author_email = 'ArneBachmann@users.noreply.github.com',
