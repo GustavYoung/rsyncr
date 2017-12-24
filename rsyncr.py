@@ -55,9 +55,9 @@ if sys.platform == 'win32':  # this assumes that the rsync for windows build is 
     if ":" in p:  # cannot use os.path.splitdrive on linux/cygwin
       x = p.split(":")
       p = "/cygdrive/" + x[0].lower() + x[1]
-    return p
+    return p[:-1] if p[-1] == "/" else p
 else:
-  def cygwinify(path): return path
+  def cygwinify(path): return path[:-1] if path[-1] == "/" else path
 
 
 # Rsync output classification helpers
@@ -92,7 +92,7 @@ def parseLine(line):
 if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017
   This rsync-wrapper simplifies backing up the current directory tree. Options:
 
-  Syntax:  rsyncr [<target-path>] [options]
+  Syntax:  rsyncr <target-path> [options]
 
   Copy mode options (default: update):
     --add       -a  Add only new files (don't update older files in target)
@@ -159,18 +159,15 @@ except:
 
 # Preprocess source and target folders
 rsyncPath = os.getenv("RSYNC", None)  # allows definition if custom executable
-cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directories name may not exist in target, we need to track its contents as its own folder
-target = cygwinify(os.path.abspath(sys.argv[1])); target = target + "/" if not target.endswith("/") else target
-source = cygwinify(os.getcwd()); source = source + "/" if not source.endswith("/") else source  # or os.path.abspath(os.path.relpath(relSource))
+cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory's name may not exist in target, we need to track its contents as its own folder
+target = cygwinify(os.path.abspath(sys.argv[1])); target += "/"
+source = cygwinify(os.getcwd()); source += "/"
 diff = os.path.relpath(target, source)
 if diff != "" and not diff.startswith(".."):
-  print("Cannot copy to sub-folder of source! Relative path: .%s%s" % (os.sep, diff))
-  sys.exit(1)
+  raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
 if not force and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
-  print("Are you sure you want to sychronize from %r to %r? Use --force if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))
-  sys.exit(2)
-if verbose:
-  print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
+  raise Exception("Are you sure you want to sychronize from %r to %r? Use --force if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))
+if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
 
 # Prepare simulation run
@@ -236,7 +233,7 @@ if ask:
   if sys.platform == 'win32':
     print("Cannot query input through wrapper batch file")
   else:
-    force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')
+    force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')  # TODO or input()
 elif simulate:
   print("Aborting before execution by user request.")  # never continue beyond this point
   if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
