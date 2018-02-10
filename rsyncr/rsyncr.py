@@ -89,7 +89,7 @@ def parseLine(line):
 
 
 # Parse command line
-if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017
+if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017-2018
   This rsync-wrapper simplifies backing up the current directory tree. Options:
 
   Syntax:  rsyncr <target-path> [options]
