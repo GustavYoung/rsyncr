@@ -171,7 +171,7 @@ if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate els
 
 
 # Prepare simulation run
-command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " -n %s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t '%s' '%s'" % (
+command = (('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"')) + " -n %s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t '%s' '%s'" % (
   "-r " if not flat else "",
   "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
   "--delete --prune-empty-dirs --delete-excluded " if sync else "",

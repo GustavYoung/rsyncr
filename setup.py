@@ -1,7 +1,7 @@
 import os, sys, time
 from setuptools import setup, find_packages
 
-if sys.version_info.major < 3: raise Exception("Only works on Python 3.x")
+if sys.version_info.major > 2: raise Exception("Only works on Python 2.x")
 
 lt = time.localtime()
 version = (lt.tm_year, (10 + lt.tm_mon) * 100 + lt.tm_mday, (10 + lt.tm_hour) * 100 + lt.tm_min)
