@@ -244,7 +244,7 @@ if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force
 
 
 # Prepare rsync execution
-command = (('"' + rsyncPath + '"') if rsyncPath is not None else "rsync") + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t -b --suffix='~~' --human-readable --stats '%s' '%s'" % (
+command = ('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"') + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t -b --suffix='~~' --human-readable --stats '%s' '%s'" % (
   "-v " if verbose else "",
   "-r " if not flat else "",
   "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
