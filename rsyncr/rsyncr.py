@@ -185,7 +185,7 @@ if verbose: print("\nSimulating: %s" % command)
 so = subprocess.Popen(command, shell = True, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
 lines = so.replace("\r", "").split("\n")
 entries = [parseLine(line) for line in lines if line != ""]  # parse itemized information
-entries = [entry for entry in entries if entry.path != ""]  # throw out all parent folders (TODO might require makedirs())
+entries = [entry for entry in entries if entry.path != "" and not entry.path.endswith(".corrupdetect")]  # throw out all parent folders (TODO might require makedirs())
 # if verbose and debug: print "\n".join([str(entry) for entry in entries])
 
 
