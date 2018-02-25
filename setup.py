@@ -10,7 +10,7 @@ versionString = '.'.join(map(str, version))
 # Clean up old binaries for twine upload
 if os.path.exists("dist"):
   rmFiles = list(sorted(os.listdir("dist")))
-  for file in (f for f in rmFiles[:-1] if any([f.endswith(ext) for ext in (".tar.gz", "zip")])):
+  for file in (f for f in (rmFiles[:-1] if "build" not in sys.argv else rmFiles) if any([f.endswith(ext) for ext in (".tar.gz", "zip")])):
     print("Removing old sdist archive %s" % file)
     try: os.unlink(os.path.join("dist", file))
     except: print("Cannot remove old distribution file " + file)
@@ -28,13 +28,14 @@ setup(
         Operating System :: OS Independent
         Programming Language :: Python
         Programming Language :: Python :: 2
+        Programming Language :: Python :: 2.7
         """.split('\n') if c.strip()],  # https://pypi.python.org/pypi?%3Aaction=list_classifiers
   keywords = 'rsync wrapper backup safety feedback UI interface',
   author = 'Arne Bachmann',
   author_email = 'ArneBachmann@users.noreply.github.com',
   maintainer = 'Arne Bachmann',
   maintainer_email = 'ArneBachmann@users.noreply.github.com',
-  url = 'http://github.com/ArneBachmann/corrupdetect',
+  url = 'http://github.com/ArneBachmann/rsyncr',
   license = 'GNU General Public License v3 (GPLv3)',
   packages = ["rsyncr"],
 #  package_dir = {"": ""},
