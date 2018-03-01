@@ -1,7 +1,7 @@
 import os, sys, time
 from setuptools import setup, find_packages
 
-if sys.version_info.major > 2: raise Exception("Only works on Python 2.x")
+if sys.version_info.major > 2: raise Exception("Only works on Python 2.7")
 
 lt = time.localtime()
 version = (lt.tm_year, (10 + lt.tm_mon) * 100 + lt.tm_mday, (10 + lt.tm_hour) * 100 + lt.tm_min)
@@ -10,7 +10,7 @@ versionString = '.'.join(map(str, version))
 # Clean up old binaries for twine upload
 if os.path.exists("dist"):
   rmFiles = list(sorted(os.listdir("dist")))
-  for file in (f for f in (rmFiles[:-1] if "build" not in sys.argv else rmFiles) if any([f.endswith(ext) for ext in (".tar.gz", "zip")])):
+  for file in (f for f in rmFiles if any([f.endswith(ext) for ext in (".tar.gz", "zip")])):
     print("Removing old sdist archive %s" % file)
     try: os.unlink(os.path.join("dist", file))
     except: print("Cannot remove old distribution file " + file)
