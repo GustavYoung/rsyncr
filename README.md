@@ -1,5 +1,5 @@
 # rsyncr #
-![GPLv3 logo](http://www.gnu.org/graphics/license-logos-by-christian-candena-cc-by.png)
+![GPLv3 logo](http://www.gnu.org/graphics/gplv3-127x51.png)
 
 Awesome useful `rsync` convenience wrapper for Python.
 Does the heavy lifting of finding potential problems.
