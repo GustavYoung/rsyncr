@@ -16,19 +16,19 @@
 #   11: x extended attributes (as above)
 
 # rsync options:
-#   -r  --recursive recursive
-#   -R  --relative preserves full path
-#   -u  --update skip files newer in target
-#   -i  --itemize-changes Show results (itemize - necessary to allow parsing)
-#   -t  --times keep timestamps
-#   -S  --sparse sparse files handling
-#   -b  --backup make backups using the "~~" suffix (into folder hierarchy), use --backup-dir and --suffix to modify base backup dir and backup suffix. A second sync will remove backups as well!
-#   -h  --human-readable
-#   -c  --checksum  compute checksum, don't use name, time and size
-#   --stats  traffic stats
-#   --existing only update files already there
-#   --ignore-existing  stronger then -u: don't copy existing files, even if older than in source
-#   --prune-empty-dirs  # on target, if updating
+#   -r  --recursive  recursive
+#   -R  --relative   preserves full path
+#   -u  --update     skip files newer in target (to avoid unnecessary write operations)
+#   -i  --itemize-changes  Show results (itemize - necessary to allow parsing)
+#   -t  --times            keep timestamps
+#   -S  --sparse           sparse files handling
+#   -b  --backup           make backups using the "~~" suffix (into folder hierarchy), use --backup-dir and --suffix to modify base backup dir and backup suffix. A second sync will remove backups as well!
+#   -h  --human-readable   ...
+#   -c  --checksum         compute checksum, don't use name, time and size
+#   --stats                show traffic stats
+#   --existing             only update files already there
+#   --ignore-existing      stronger than -u: don't copy existing files, even if older than in source
+#   --prune-empty-dirs     on target, if updating
 #   -z, --compress --compress-level=9
 
 
@@ -90,13 +90,13 @@ def parseLine(line):
 
 # Parse command line
 if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017-2018
-  This rsync-wrapper simplifies backing up the current directory tree. Options:
+  This rsync-wrapper simplifies backing up the current directory tree.
 
   Syntax:  rsyncr <target-path> [options]
 
   Copy mode options (default: update):
-    --add       -a  Add only new files (don't update older files in target)
-    --sync      -s  Remove files in target if removed in source
+    --add       -a  Copy only additional files (otherwise updating only younger files)
+    --sync      -s  Remove files in target if removed in source, including empty folders
     --simulate  -n  Don't actually sync, stop after simulation
     --force     -y  Sync even if deletions or moved files have been detected
     --ask       -i  In case of dangerous operation, ask user interactively
@@ -166,21 +166,25 @@ diff = os.path.relpath(target, source)
 if diff != "" and not diff.startswith(".."):
   raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
 if not force and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
-  raise Exception("Are you sure you want to sychronize from %r to %r? Use --force if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))
+  raise Exception("Are you sure you want to synchronize from %r to %r? Use --force if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))  # TODO D: to E: raises warning as well
 if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
 
-# Prepare simulation run
-command = (('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"')) + " -n %s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t '%s' '%s'" % (
-  "-r " if not flat else "",
-  "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
-  "--delete --prune-empty-dirs --delete-excluded " if sync else "",
-  "-S -z --compress-level=9 " if compress else "",
-  source,
-  target)
+def getCommand(simulate = True):
+  return (('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"')) + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t %s'%s' '%s'" % (
+      "-n " if simulate else "",
+      "-r " if not flat else "",
+      "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, --ignore-existing observes existence
+      "--delete --prune-empty-dirs --delete-excluded " if sync else "",
+      "-S -z --compress-level=9 " if compress else "",
+      "" if simulate else "-b --suffix='~~' --human-readable --stats ",
+      source,
+      target
+    )
 
 
 # Simulation rsync run
+command = getCommand(simulate = True)
 if verbose: print("\nSimulating: %s" % command)
 so = subprocess.Popen(command, shell = True, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
 lines = so.replace("\r", "").split("\n")
@@ -245,17 +249,8 @@ if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force
   sys.exit(0)
 
 
-# Prepare rsync execution
-command = ('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"') + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t -b --suffix='~~' --human-readable --stats '%s' '%s'" % (
-  "-v " if verbose else "",
-  "-r " if not flat else "",
-  "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, this observes existence
-  "--delete --prune-empty-dirs --delete-excluded " if sync else "",
-  "-S -z --compress-level=9 " if compress else "",
-  source,
-  target)
-
 # Main rsync execution with some stats output
+command = getCommand(simulate = False)
 if verbose: print("\nExecuting: " + command)
 subprocess.Popen(command, shell = True, bufsize = 1, stdout = sys.stdout, stderr = sys.stderr).wait()
 

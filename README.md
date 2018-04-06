@@ -9,7 +9,7 @@ Might be slow on many renames/moves.
 
 ## Installation ##
 ```
-pip[3] install rsyncr
+pip install rsyncr
 ```
 
 ## Usage ##
@@ -18,9 +18,9 @@ rsyncr <target-folder> [options]
 ```
 with options:
 ```
-Copy mode options (default: update):
-    --add       -a  Add only new files (don't update older files in target)
-    --sync      -s  Remove files in target if removed in source
+  Copy mode options (default: update):
+    --add       -a  Copy only additional files (otherwise updating only younger files)
+    --sync      -s  Remove files in target if removed in source, including empty folders
     --simulate  -n  Don't actually sync, stop after simulation
     --force     -y  Sync even if deletions or moved files have been detected
     --ask       -i  In case of dangerous operation, ask user interactively
