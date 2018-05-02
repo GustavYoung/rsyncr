@@ -158,7 +158,7 @@ except:
 
 
 # Preprocess source and target folders
-rsyncPath = os.getenv("RSYNC", None)  # allows definition if custom executable
+rsyncPath = os.getenv("RSYNC", "rsync")  # allows definition if custom executable
 cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory's name may not exist in target, we need to track its contents as its own folder
 target = cygwinify(os.path.abspath(sys.argv[1])); target += "/"
 source = cygwinify(os.getcwd()); source += "/"
@@ -171,7 +171,7 @@ if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate els
 
 
 def getCommand(simulate = True):
-  return (('"' + (rsyncPath if rsyncPath is not None else "rsync") + '"')) + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t %s'%s' '%s'" % (
+  return (('"' + rsyncPath + '"')) + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t %s'%s' '%s'" % (
       "-n " if simulate else "",
       "-r " if not flat else "",
       "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, --ignore-existing observes existence
@@ -186,15 +186,14 @@ def getCommand(simulate = True):
 # Simulation rsync run
 command = getCommand(simulate = True)
 if verbose: print("\nSimulating: %s" % command)
-so = subprocess.Popen(command, shell = True, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
+so, _se = subprocess.Popen(command, shell = False, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()
 lines = so.replace("\r", "").split("\n")
 entries = [parseLine(line) for line in lines if line != ""]  # parse itemized information
 entries = [entry for entry in entries if entry.path != "" and not entry.path.endswith(".corrupdetect")]  # throw out all parent folders (TODO might require makedirs())
 # if verbose and debug: print "\n".join([str(entry) for entry in entries])
 
-
 # Detect files belonging to newly create directories - can be ignored regarding removal or moving
-newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path) and e.type == "file"] for entry in entries if entry.newdir}
+newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path) and e.type == "file"] for entry in entries if entry.newdir}  # associate dirs with contained files
 entries = [entry for entry in entries if entry.path not in newdirs and not xany(lambda files: entry.path in files, newdirs.values())]
 
 # Main logic: Detect files and relationships
@@ -252,7 +251,7 @@ if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force
 # Main rsync execution with some stats output
 command = getCommand(simulate = False)
 if verbose: print("\nExecuting: " + command)
-subprocess.Popen(command, shell = True, bufsize = 1, stdout = sys.stdout, stderr = sys.stderr).wait()
+subprocess.Popen(command, shell = False, bufsize = 1, stdout = sys.stdout, stderr = sys.stderr).wait()
 
 
 # Quit
