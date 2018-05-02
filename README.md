@@ -4,7 +4,9 @@
 Awesome useful `rsync` convenience wrapper for Python.
 Does the heavy lifting of finding potential problems.
 
-Might be slow on many renames/moves.
+We recommend using `PyPy`, which appears to operate order(s) of magnitude faster during the file tree computations.
+
+The code may be slow when encountering many renames/moves.
 
 
 ## Installation ##

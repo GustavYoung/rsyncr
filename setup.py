@@ -1,7 +1,7 @@
 import os, sys, time
 from setuptools import setup, find_packages
 
-if sys.version_info.major > 2: raise Exception("Only works on Python 2.7")
+if sys.version_info.major > 2: raise Exception("Only works well on Python 2.7, using PyPy2-6.0 is recommended")
 
 lt = time.localtime()
 version = (lt.tm_year, (10 + lt.tm_mon) * 100 + lt.tm_mday, (10 + lt.tm_hour) * 100 + lt.tm_min)
@@ -20,6 +20,7 @@ setup(
   version = versionString,  # without extra
   description = "rsyncr - An enhanced rsync backup wrapper script",
   long_description = "",  # TODO
+  install_requires = ["textdistance >= 3"],  # actually an optional dependency
   classifiers = [c.strip() for c in """
         Development Status :: 5 - Production/Stable
         Intended Audience :: Science/Research
