@@ -96,17 +96,18 @@ if __name__ == '__main__':
     Syntax:  rsyncr <target-path> [options]
 
     Copy mode options (default: update):
-      --add       -a  Copy only additional files (otherwise updating only younger files)
-      --sync      -s  Remove files in target if removed in source, including empty folders
-      --simulate  -n  Don't actually sync, stop after simulation
-      --force     -y  Sync even if deletions or moved files have been detected
-      --ask       -i  In case of dangerous operation, ask user interactively
+      --add                -a  Copy only additional files (otherwise updating only younger files)
+      --sync               -s  Remove files in target if removed in source, including empty folders
+      --simulate           -n  Don't actually sync, stop after simulation
+      --force-foldername   -f  Sync even if target folder name differs
+      --force              -y  Sync even if deletions or moved files have been detected
+      --ask                -i  In case of dangerous operation, ask user interactively
 
     Generic options:
-      --flat      -1  Don't recurse into sub folders, only copy current folder
-      --compress  -c  Compress data during transport, handle many files better
-      --verbose   -v  Show more output
-      --help      -h  Show this information
+      --flat       -1  Don't recurse into sub folders, only copy current folder
+      --compress   -c  Compress data during transport, handle many files better
+      --verbose    -v  Show more output
+      --help       -h  Show this information
   """); sys.exit(0)
 
 
@@ -114,8 +115,8 @@ if __name__ == '__main__':
   add = '--add' in sys.argv or '-a' in sys.argv
   sync = '--sync' in sys.argv or '-s' in sys.argv
   simulate = '--simulate' in sys.argv or '-n' in sys.argv
+  force_foldername = '--force-foldername' in sys.argv or '-f' in sys.argv
   force = '--force' in sys.argv or '-y' in sys.argv
-  force_foldername = '--force-foldername' in sys.argv or '-Y' in sys.argv
   ask = '--ask' in sys.argv or '-i' in sys.argv
   flat = '--flat' in sys.argv or '-1' in sys.argv
   compress = '--compress' in sys.argv or '-c' in sys.argv
