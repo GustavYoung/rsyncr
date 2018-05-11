@@ -43,6 +43,12 @@ import sys
 MAX_MOVE_DIRS = 2  # don't show more than this number of potential directory moves
 MAX_EDIT_DISTANCE = 5  # insertions/deletions/replacements(/moves for damerau-levenshtein)
 
+# Rsync output classification helpers
+State = {".": "unchanged", ">": "store", "c": "changed", "<": "restored", "*": "message"}
+Entry = {"f": "file", "d": "dir", "u": "unknown"}
+Change = {".": False, "+": True, "s": True, "t": True}  # size/time have [.+st] in their position
+FileState = collections.namedtuple("FileState", ["state", "type", "change", "path", "newdir"])  # 9 characters and one space before relative path
+
 
 # Utility functions
 def xany(pred, lizt): return reduce(lambda a, b: a or pred(b), lizt if hasattr(lizt, '__iter__') else list(lizt), False)
@@ -79,16 +85,21 @@ def parseLine(line):
   except: raise Exception("Wrong path prefix: %s vs %s " % (path, cwdParent))
   return FileState(state, entry, change, path[len(cwdParent):], newdir)
 
+def getCommand(simulate):
+  return (('"' + rsyncPath + '"')) + " %s%s%s%s%s--exclude=.redundir/ --exclude=$RECYCLE.BIN/ --exclude='System Volume Information' --filter='P .redundir' --filter='P $RECYCLE.BIN' --filter='P System Volume Information' -i -t %s'%s' '%s'" % (
+      "-n " if simulate else "",
+      "-r " if not flat else "",
+      "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, --ignore-existing observes existence
+      "--delete --prune-empty-dirs --delete-excluded " if sync else "",
+      "-S -z --compress-level=9 " if compress else "",
+      "" if simulate else "-b --suffix='~~' --human-readable --stats ",
+      source,
+      target
+    )
 
-# Main entry
+
+# Main script code
 if __name__ == '__main__':
-  # Rsync output classification helpers
-  State = {".": "unchanged", ">": "store", "c": "changed", "<": "restored", "*": "message"}
-  Entry = {"f": "file", "d": "dir", "u": "unknown"}
-  Change = {".": False, "+": True, "s": True, "t": True}  # size/time have [.+st] in their position
-  FileState = collections.namedtuple("FileState", ["state", "type", "change", "path", "newdir"])  # 9 characters and one space before relative path
-
-
   # Parse command line
   if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr  (C) Arne Bachmann 2017-2018
     This rsync-wrapper simplifies backing up the current directory tree.
@@ -173,27 +184,13 @@ if __name__ == '__main__':
   if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
 
-  def getCommand(simulate = True):
-    return (('"' + rsyncPath + '"')) + " %s%s%s%s%s--exclude=.redundir/ --exclude=$RECYCLE.BIN/ --exclude='System Volume Information' --filter='P .redundir' --filter='P $RECYCLE.BIN' --filter='P System Volume Information' -i -t %s'%s' '%s'" % (
-        "-n " if simulate else "",
-        "-r " if not flat else "",
-        "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, --ignore-existing observes existence
-        "--delete --prune-empty-dirs --delete-excluded " if sync else "",
-        "-S -z --compress-level=9 " if compress else "",
-        "" if simulate else "-b --suffix='~~' --human-readable --stats ",
-        source,
-        target
-      )
-
-
   # Simulation rsync run
   command = getCommand(simulate = True)
   if verbose: print("\nSimulating: %s" % command)
-  so, _se = subprocess.Popen(command, shell = False, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()
+  so = subprocess.Popen(command, shell = False, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
   lines = so.replace("\r", "").split("\n")
   entries = [parseLine(line) for line in lines if line != ""]  # parse itemized information
   entries = [entry for entry in entries if entry.path != "" and not entry.path.endswith(".corrupdetect")]  # throw out all parent folders (TODO might require makedirs())
-  # if verbose and debug: print "\n".join([str(entry) for entry in entries])
 
   # Detect files belonging to newly create directories - can be ignored regarding removal or moving
   newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path) and e.type == "file"] for entry in entries if entry.newdir}  # associate dirs with contained files
@@ -221,10 +218,10 @@ if __name__ == '__main__':
     if verbose: print("\n".join("  " + add for add in added))
   if len(newdirs) > 0:
     print("%-5s added dirs  (including %d files)" % (len(newdirs), sum([len(files) for files in newdirs.values()])))
-    if verbose: print("\n".join("D " + folder + " (%d files)" % len(files) + ("\n  " + "\n  ".join(files) if len(files) > 0 else "") for folder, files in sorted(newdirs.items())))
+    if verbose: print("\n".join("DIR " + folder + " (%d files)" % len(files) + ("\n    " + "\n    ".join(files) if len(files) > 0 else "") for folder, files in sorted(newdirs.items())))
   if len(modified) > 0:
     print("%-5s mod'd files" % len(modified))
-    if verbose: print("\n".join("  " + mod for mod in sorted(modified)))
+    if verbose: print("\n".join("  > " + mod for mod in sorted(modified)))
   if len(removes) > 0:
     print("%-5s rem'd entries" % len(removes))
     print("\n".join("  " + rem for rem in sorted(removes)))
@@ -234,20 +231,22 @@ if __name__ == '__main__':
   if len(potentialMoveDirs) > 0:
     print("%-5s moved dirs  (maybe) " % len(potentialMoveDirs))
     print("\n".join("  %s -> %s" % (_from, _tos) for _from, _tos in sorted(potentialMoveDirs.items())))
+  if not (added or newdirs or modified or removes):
+    print("Nothing to do.")
 
 
-  # Breaking point
+  # Breaking point before real execution
   if ask:
     if sys.platform == 'win32':
-      print("Cannot query input through wrapper batch file")
+      print("Cannot get interactive user input from wrapper batch file")
     else:
-      force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')  # TODO or input()
+      force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')  # TODO or input() for Python 3
   elif simulate:
     print("Aborting before execution by user request.")  # never continue beyond this point
     if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
     sys.exit(0)
   if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
-    print("\nPotentially damaging changes detected. Use --force to run rsync anyway.")
+    print("\nPotentially harmful changes detected. Use --force to run rsync anyway.")
     sys.exit(0)
 
 
