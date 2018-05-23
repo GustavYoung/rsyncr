@@ -98,6 +98,7 @@ if len(sys.argv) < 2 or '--help' in sys.argv or '-' in sys.argv: print("""rsyncr
     --add       -a  Copy only additional files (otherwise updating only younger files)
     --sync      -s  Remove files in target if removed in source, including empty folders
     --simulate  -n  Don't actually sync, stop after simulation
+    --backup    -b  Create backup files for updated files in target
     --force     -y  Sync even if deletions or moved files have been detected
     --ask       -i  In case of dangerous operation, ask user interactively
 
@@ -118,6 +119,7 @@ ask = '--ask' in sys.argv or '-i' in sys.argv
 flat = '--flat' in sys.argv or '-1' in sys.argv
 compress = '--compress' in sys.argv or '-c' in sys.argv
 verbose = '--verbose' in sys.argv or '-v' in sys.argv
+backup = '--backup' in sys.argv or '-b' in sys.argv
 if verbose:
   import time
   time_start = time.time()
@@ -163,6 +165,8 @@ cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory
 target = cygwinify(os.path.abspath(sys.argv[1])); target += "/"
 source = cygwinify(os.getcwd()); source += "/"
 diff = os.path.relpath(target, source)
+#if not os.path.exists(sys.argv[1]) and verbose:
+#  raise Exception("Target path %r not found" % sys.argv[1])
 if diff != "" and not diff.startswith(".."):
   raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
 if not force and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
@@ -170,14 +174,14 @@ if not force and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
 if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
 
-def getCommand(simulate = True):
-  return (('"' + rsyncPath + '"')) + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t %s'%s' '%s'" % (
+def getCommand(simulate = True):  # -m prune empty dir chains from file list  -I copy even if size/mtime match
+  return '"%s"' % rsyncPath + " %s%s%s%s%s--exclude=.redundir/ --filter='P .redundir' -i -t %s'%s' '%s'" % (  # -t keep times, -i itemize
       "-n " if simulate else "",
       "-r " if not flat else "",
-      "--ignore-existing " if add else "-u ",  # -u only observes timestamp of target, --ignore-existing observes existence
+      "--ignore-existing " if add else "-u ",  # -u only copy if younger, --ignore-existing only copy additional files (vs. --existing: don't add new files)
       "--delete --prune-empty-dirs --delete-excluded " if sync else "",
       "-S -z --compress-level=9 " if compress else "",
-      "" if simulate else "-b --suffix='~~' --human-readable --stats ",
+      "" if simulate or not backup else "-b --suffix='~~' --human-readable --stats ",
       source,
       target
     )
@@ -197,6 +201,7 @@ newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path)
 entries = [entry for entry in entries if entry.path not in newdirs and not xany(lambda files: entry.path in files, newdirs.values())]
 
 # Main logic: Detect files and relationships
+if verbose: print("Preparing file lists")
 def new(entry): return [e.path for e in addNames if e != entry and os.path.basename(entry.path) == os.path.basename(e.path)]  # all entries not being the first one (which they shouldn't be anyway)
 addNames = [f for f in entries if f.state == "store"]
 potentialMoves = {old.path: new(old) for old in entries if old.type == "unknown" and old.state == "deleted"}  # what about modified?
@@ -236,7 +241,7 @@ if len(potentialMoveDirs) > 0:
 # Breaking point
 if ask:
   if sys.platform == 'win32':
-    print("Cannot query input through wrapper batch file")
+    print("Cannot query interactive user input through pip-installed console script file")
   else:
     force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')  # TODO or input()
 elif simulate:
