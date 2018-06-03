@@ -157,7 +157,6 @@ if __name__ == '__main__':
   user = sys.argv[sys.argv.index('--user') + 1] if '--user' in sys.argv else None
   if user: del sys.argv[sys.argv.index('--user'):sys.argv.index('--user') + 2]
   if sys.argv[1].startswith('rsync://'): sys.argv[1].replace('rsync://', '')
-  import pdb; pdb.set_trace()
   if '@' in sys.argv[1]:  # must be a remote URL with user name specified
     user = sys.argv[1].split("@")[0]
     sys.argv[1] = sys.argv[1].split("@")[1]
