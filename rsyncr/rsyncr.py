@@ -86,6 +86,7 @@ def parseLine(line):
   return FileState(state, entry, change, path[len(cwdParent):], newdir)
 
 def getCommand(simulate):  # -m prune empty dir chains from file list  -I copy even if size/mtime match
+  ''' Warning: Consults global variables. '''
   return '"%s"' % rsyncPath + " %s%s%s%s%s--exclude=.redundir/ --exclude=$RECYCLE.BIN/ --exclude='System Volume Information' --filter='P .redundir' --filter='P $RECYCLE.BIN' --filter='P System Volume Information' -i -t %s'%s' '%s'" % (  # -t keep times, -i itemize
       "-n " if simulate else "",
       "-r " if not flat else "",
@@ -112,6 +113,8 @@ if __name__ == '__main__':
       --force-foldername   -f  Sync even if target folder name differs
       --force              -y  Sync even if deletions or moved files have been detected
       --ask                -i  In case of dangerous operation, ask user interactively
+      --file <file path>       Transfer a single local file instead of synchronizing a folder
+      --user <user name>   -u  Manual remote user name specification, unless using user@host notation
 
     Generic options:
       --flat       -1  Don't recurse into sub folders, only copy current folder
@@ -131,6 +134,31 @@ if __name__ == '__main__':
   flat = '--flat' in sys.argv or '-1' in sys.argv
   compress = '--compress' in sys.argv or '-c' in sys.argv
   verbose = '--verbose' in sys.argv or '-v' in sys.argv
+
+  # Source handling
+  file = sys.argv[sys.argv.index('--file') + 1] if '--file' in sys.argv else None
+  if file: del sys.argv[sys.argv.index('--file'):sys.argv.index('--file') + 2]; print("Running in single file transfer mode for %r" % file)
+  while len(file) > 0 and file[0] in '/\\': file = file[1:]
+  while len(file) > 0 and file[-1] in '/\\': file = file[:-1]
+
+  # Target handling
+  user = sys.argv[sys.argv.index('--user') + 1] if '--user' in sys.argv else None
+  if user: del sys.argv[sys.argv.index('--user'):sys.argv.index('--user') + 2]
+  if '@' in sys.argv[1]:  # must be a remote URL with user name specified
+    user = sys.argv[1].split("@")[0]
+    target = sys.argv[1].split("@")[1]
+    remote = True
+    assert ':' in target
+  else: remote = None
+  if user: print("Using remote account %r for login" % user)
+  remote = remote or ':' in sys.argv[1]
+  if remote:
+    remote = sys.argv[1].split(':')[0]  # host name
+    target = sys.argv[1].split(':')[1]  # remote path
+    assert user
+  else:  # local mode
+    target = cygwinify(os.path.abspath(sys.argv[1]))
+
   if verbose:
     import time
     time_start = time.time()
@@ -173,13 +201,16 @@ if __name__ == '__main__':
   # Preprocess source and target folders
   rsyncPath = os.getenv("RSYNC", "rsync")  # allows definition if custom executable
   cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory's name may not exist in target, we need to track its contents as its own folder
-  target = cygwinify(os.path.abspath(sys.argv[1])); target += "/"
+  if target[-1] != "/": target += "/"
   source = cygwinify(os.getcwd()); source += "/"
-  diff = os.path.relpath(target, source)
-  if diff != "" and not diff.startswith(".."):
-    raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
+  if not remote:
+    diff = os.path.relpath(target, source)
+    if diff != "" and not diff.startswith(".."):
+      raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
   if not force_foldername and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
-    raise Exception("Are you sure you want to synchronize from %r to %r? Use --force-foldername if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))  # TODO D: to E: raises warning as well
+    raise Exception("Are you sure you want to synchronize from %r to %r? Use --force-foldername or -f if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))  # TODO D: to E: raises warning as well
+  if file: source + "/" + file  # combine source folder
+  if remote: target = remote + ":" + target
   if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
 
@@ -245,7 +276,7 @@ if __name__ == '__main__':
     if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
     sys.exit(0)
   if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
-    print("\nPotentially harmful changes detected. Use --force to run rsync anyway.")
+    print("\nPotentially harmful changes detected. Use --force or -y to run rsync anyway.")
     sys.exit(0)
 
 
