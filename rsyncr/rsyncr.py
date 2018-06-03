@@ -150,8 +150,8 @@ if __name__ == '__main__':
     if not os.path.exists(file): raise Exception("File not found %r" % file)
     file = file.replace("\\", "/")
     print("Running in single file transfer mode for %r" % file)
-  while len(file) > 0 and file[0] == '/': file = file[1:]
-  while len(file) > 0 and file[-1] == '/': file = file[:-1]
+    while len(file) > 0 and file[0] == '/': file = file[1:]
+    while len(file) > 0 and file[-1] == '/': file = file[:-1]
 
   # Target handling
   user = sys.argv[sys.argv.index('--user') + 1] if '--user' in sys.argv else None
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     assert ':' in sys.argv[1]
   else: remote = None
   if user: print("Using remote account %r for login" % user)
-  remote = remote or ':' in sys.argv[1]
+  remote = remote or ':' in sys.argv[1][2:]  # ignore drive letter separator
   if remote:  # TODO use getpass lib
     remote = sys.argv[1].split(':')[0]  # host name
     target = sys.argv[1].split(':')[1]  # remote path
