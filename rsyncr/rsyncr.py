@@ -134,6 +134,7 @@ if __name__ == '__main__':
   flat = '--flat' in sys.argv or '-1' in sys.argv
   compress = '--compress' in sys.argv or '-c' in sys.argv
   verbose = '--verbose' in sys.argv or '-v' in sys.argv
+  backup = '--backup' in sys.argv
 
   # Source handling
   file = sys.argv[sys.argv.index('--file') + 1] if '--file' in sys.argv else None
@@ -152,7 +153,7 @@ if __name__ == '__main__':
   else: remote = None
   if user: print("Using remote account %r for login" % user)
   remote = remote or ':' in sys.argv[1]
-  if remote:
+  if remote:  # TODO use getpass lib
     remote = sys.argv[1].split(':')[0]  # host name
     target = sys.argv[1].split(':')[1]  # remote path
     assert user
@@ -209,7 +210,7 @@ if __name__ == '__main__':
       raise Exception("Cannot copy to parent folder of source! Relative path: .%s%s" % (os.sep, diff))
   if not force_foldername and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
     raise Exception("Are you sure you want to synchronize from %r to %r? Use --force-foldername or -f if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))  # TODO D: to E: raises warning as well
-  if file: source + "/" + file  # combine source folder
+  if file: source += file  # combine source folder
   if remote: target = remote + ":" + target
   if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else "SYNC"), source, target))
 
