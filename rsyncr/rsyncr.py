@@ -44,7 +44,7 @@ MAX_MOVE_DIRS = 2  # don't show more than this number of potential directory mov
 MAX_EDIT_DISTANCE = 5  # insertions/deletions/replacements(/moves for damerau-levenshtein)
 
 # Rsync output classification helpers
-State = {".": "unchanged", ">": "store", "c": "changed", "<": "restored", "*": "message"}
+State = {".": "unchanged", ">": "store", "c": "changed", "<": "restored", "*": "message"}  # rsync output marker detection
 Entry = {"f": "file", "d": "dir", "u": "unknown"}
 Change = {".": False, "+": True, "s": True, "t": True}  # size/time have [.+st] in their position
 FileState = collections.namedtuple("FileState", ["state", "type", "change", "path", "newdir"])  # 9 characters and one space before relative path
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     Syntax:  rsyncr <target-path> [options]
 
     Copy mode options (default: update):
-      --add                -a  Copy only additional files (otherwise updating only younger files)
+      --add                -a  Copy only additional files (otherwise update modified files)
       --sync               -s  Remove files in target if removed in source, including empty folders
       --simulate           -n  Don't actually sync, stop after simulation
       --force-foldername   -f  Sync even if target folder name differs
@@ -173,8 +173,6 @@ if __name__ == '__main__':
   else:  # local mode
     target = cygwinify(os.path.abspath(sys.argv[1]))
 
-
-  # External modules - down here as we need parsed options
   try:
     from textdistance import distance as _distance  # https://github.com/orsinium/textdistance, now for Python 2 as well
     def distance(a, b): return _distance('l', a, b)  # h = hamming, l = levenshtein, dl = damerau-levenshtein
@@ -207,7 +205,6 @@ if __name__ == '__main__':
             assert distance("abc", "cbe") == 1
             if verbose: print("Using simple comparison")
 
-
   # Preprocess source and target folders
   rsyncPath = os.getenv("RSYNC", "rsync")  # allows definition if custom executable
   cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory's name may not exist in target, we need to track its contents as its own folder
@@ -225,7 +222,7 @@ if __name__ == '__main__':
 
 
   # Simulation rsync run
-  if not file:
+  if not file and (simulate or not add):  # only simulate in multi-file mode. in add-only mode we need not check for conflicts
     command = getCommand(simulate = True)
     if verbose: print("\nSimulating: %s" % command)
     so = subprocess.Popen(command, shell = False, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
@@ -282,16 +279,16 @@ if __name__ == '__main__':
         print("Cannot get interactive user input from wrapper batch file")
       else:
         force = raw_input("Continue? [y/N] ").strip().lower().startswith('y')  # TODO or input() for Python 3
-    elif simulate:
-      print("Aborting before execution by user request.")  # never continue beyond this point
-      if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
-      sys.exit(0)
     if len(removes) + len(potentialMoves) + len(potentialMoveDirs) > 0 and not force:
       print("\nPotentially harmful changes detected. Use --force or -y to run rsync anyway.")
       sys.exit(0)
 
 
   # Main rsync execution with some stats output
+  if simulate:
+    print("Aborting before execution by user request.")  # never continue beyond this point
+    if verbose: print("Finished after %.1f minutes." % ((time.time() - time_start) / 60.))
+    sys.exit(0)
   command = getCommand(simulate = False)
   if verbose: print("\nExecuting: " + command)
   subprocess.Popen(command, shell = False, bufsize = 1, stdout = sys.stdout, stderr = sys.stderr).wait()
