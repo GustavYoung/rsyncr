@@ -89,7 +89,7 @@ def getCommand(simulate):  # -m prune empty dir chains from file list  -I copy e
   ''' Warning: Consults global variables. '''
   return '"%s"' % rsyncPath + " %s%s%s%s%s%s%s -i -t --exclude=.redundir/ --exclude=$RECYCLE.BIN/ --exclude='System Volume Information' --filter='P .redundir' --filter='P $RECYCLE.BIN' --filter='P System Volume Information' '%s' '%s'" % (  # -t keep times, -i itemize
       "-n " if simulate else "",
-      "-r " if not flat else "",
+      "-r " if not flat and not file else "",
       "--ignore-existing " if add else ("-I " if override else "-u "),  # -u only copy if younger, --ignore-existing only copy additional files (vs. --existing: don't add new files)
       "--delete --prune-empty-dirs --delete-excluded " if sync else "",
       "-S -z --compress-level=9 " if compress else "",
@@ -106,6 +106,8 @@ if __name__ == '__main__':
     This rsync-wrapper simplifies backing up the current directory tree.
 
     Syntax:  rsyncr <target-path> [options]
+
+    Path is either a local folder /path or Drive:\\path  or a remote path [rsync://][user@]host:/path
 
     Copy mode options (default: update):
       --add                -a  Copy only additional files (otherwise update modified files)
@@ -153,23 +155,24 @@ if __name__ == '__main__':
     while len(file) > 0 and file[0] == '/': file = file[1:]
     while len(file) > 0 and file[-1] == '/': file = file[:-1]
 
-  # Target handling
+  # Target handling. Accepted target paths: /local_path, or D:\local_path, or rsync://path, or rsync://user@path, arnee@rsync.hidrive.strato.com:/users/arnee/path/
   user = sys.argv[sys.argv.index('--user') + 1] if '--user' in sys.argv else None
   if user: del sys.argv[sys.argv.index('--user'):sys.argv.index('--user') + 2]
-  if sys.argv[1].startswith('rsync://'): sys.argv[1].replace('rsync://', '')
+  remote = None
+  if sys.argv[1].startswith('rsync://'): sys.argv[1] = sys.argv[1].replace('rsync://', ''); remote = True
   if '@' in sys.argv[1]:  # must be a remote URL with user name specified
     user = sys.argv[1].split("@")[0]
     sys.argv[1] = sys.argv[1].split("@")[1]
     remote = True
-    assert ':' in sys.argv[1]
-  else: remote = None
   if user: print("Using remote account %r for login" % user)
-  remote = remote or ':' in sys.argv[1][2:]  # ignore drive letter separator
-  if remote:  # TODO use getpass lib
-    remote = sys.argv[1].split(':')[0]  # host name
-    target = sys.argv[1].split(':')[1]  # remote path
-    assert user
-    remote = user + "@" + remote  # 'rsync://' + TODO doesn't work due to protocol errors or rsync error: error starting client-server protocol (code 5)
+  remote = remote or ':' in sys.argv[1][2:]  # ignore potential drive letter separator (in local Windows paths)
+  if remote:  # TODO use getpass library
+    if not user: raise Exception("User name required for remote file upload")
+    if ':' not in sys.argv[1]: raise Exception("Expecting server:path rsync path")
+    host = sys.argv[1].split(':')[0]  # host name
+    path = sys.argv[1].split(':')[1]  # remote target path
+    remote = user + "@" + host
+    target = remote + ":" + path  # TODO this simply reconstructs what ws deconstructed above, right?
   else:  # local mode
     target = cygwinify(os.path.abspath(sys.argv[1]))
 
@@ -217,7 +220,6 @@ if __name__ == '__main__':
   if not force_foldername and os.path.basename(source[:-1]) != os.path.basename(target[:-1]):
     raise Exception("Are you sure you want to synchronize from %r to %r? Use --force-foldername or -f if yes" % (os.path.basename(source[:-1]), os.path.basename(target[:-1])))  # TODO D: to E: raises warning as well
   if file: source += file  # combine source folder (with trailing slash) with file name
-  if remote: target = remote + ":" + target
   if verbose: print("Operation: %s%s from %s to %s" % ("SIMULATE " if simulate else "", "ADD" if add else ("UPDATE" if not sync else ("SYNC" if not override else "COPY")), source, target))
 
 
