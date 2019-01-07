@@ -58,6 +58,8 @@ def xall(pred, lizt): return reduce(lambda a, b: a and pred(b), lizt if hasattr(
 if sys.platform == 'win32':  # this assumes that the rsync for windows build is using cygwin internals
   def cygwinify(path):
     p = path.replace("\\", "/")
+    while "//" in p: p = p.replace("//", "/")
+    while "::" in p: p = p.replace("::", ":")
     if ":" in p:  # cannot use os.path.splitdrive on linux/cygwin
       x = p.split(":")
       p = "/cygdrive/" + x[0].lower() + x[1]
