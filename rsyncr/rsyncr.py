@@ -66,16 +66,21 @@ else:
   def cygwinify(path): return path[:-1] if path[-1] == "/" else path
 
 def parseLine(line):
-  ''' Parse one rsync item. '''
+  ''' Parse one rsync item.
+  >>> print(parseLine("*deleting   05 - Bulgarien/IMG_0648.JPG"))
+  FileState(state='deleted', type='unknown', change=True, path='/07/05 - Bulgarien/IMG_0648.JPG', newdir=False)
+  >>> print(parseLine(">f+++++++++ 05 - Bulgarien/07/IMG_0682.JPG"))
+  FileState(state='store', type='file', change=False, path='/07/05 - Bulgarien/07/IMG_0682.JPG', newdir=False)
+  '''
   atts = line.split(" ")[0]  # until space between itemization info and path
-  path = line[line.index(" ") + 1:]
+  path = line[line.index(" ") + 1:]  # TODO combine commands
 
-  state = State.get(atts[0])
+  state = State.get(atts[0])  # *deleting
   if state != "message":
-    entry = Entry.get(atts[1])
-    change = xany(lambda _: _ in "cstpoguax", atts[2:])  # check attributes
+    entry = Entry.get(atts[1])  # f:file, d:dir
+    change = xany(lambda _: _ in "cstpoguax", atts[2:])  # check attributes for any change
   else:
-    entry = Entry["u"]
+    entry = Entry["u"]  # unknown type
     change = True
   while path.startswith(" "): path = path[1:]
   path = cygwinify(os.path.abspath(path))
@@ -211,6 +216,7 @@ if __name__ == '__main__':
   # Preprocess source and target folders
   rsyncPath = os.getenv("RSYNC", "rsync")  # allows definition if custom executable
   cwdParent = cygwinify(os.path.dirname(os.getcwd()))  # because current directory's name may not exist in target, we need to track its contents as its own folder
+  if '--test' in sys.argv: import doctest; doctest.testmod(); sys.exit(0)
   if target[-1] != "/": target += "/"
   source = cygwinify(os.getcwd()); source += "/"
   if not remote:
@@ -228,19 +234,20 @@ if __name__ == '__main__':
     command = getCommand(simulate = True)
     if verbose: print("\nSimulating: %s" % command)
     so = subprocess.Popen(command, shell = False, bufsize = 1, stdout = subprocess.PIPE, stderr = sys.stderr).communicate()[0]
-    lines = so.replace("\r", "").split("\n")
+    lines = so.replace("\r\n", "\n").split("\n")
     entries = [parseLine(line) for line in lines if line != ""]  # parse itemized information
     entries = [entry for entry in entries if entry.path != "" and not entry.path.endswith(".corrupdetect")]  # throw out all parent folders (TODO might require makedirs())
 
     # Detect files belonging to newly create directories - can be ignored regarding removal or moving
     newdirs = {entry.path: [e.path for e in entries if e.path.startswith(entry.path) and e.type == "file"] for entry in entries if entry.newdir}  # associate dirs with contained files
     entries = [entry for entry in entries if entry.path not in newdirs and not xany(lambda files: entry.path in files, newdirs.values())]
+    # TODO why exclude files in newdirs from being recognized as moved? must be complementary to the movedirs logic
 
     # Main logic: Detect files and relationships
     def new(entry): return [e.path for e in addNames if e != entry and os.path.basename(entry.path) == os.path.basename(e.path)]  # all entries not being the first one (which they shouldn't be anyway)
     addNames = [f for f in entries if f.state == "store"]
     potentialMoves = {old.path: new(old) for old in entries if old.type == "unknown" and old.state == "deleted"}  # what about modified?
-    removes = [rem for rem, froms in potentialMoves.items() if froms == []]
+    removes = [rem for rem, froms in potentialMoves.items() if froms == []]  # exclude entries that have no origin
     potentialMoves = {k: v for k, v in potentialMoves.items() if k not in removes}
     modified = [entry.path for entry in entries if entry.type == "file" and entry.change and entry.path not in removes and entry.path not in potentialMoves]
     added = [entry.path for entry in entries if entry.type == "file" and entry.state in ("store", "changed") and entry.path and not xany(lambda a: entry.path in a, potentialMoves.values())]  # latter is a weak check
